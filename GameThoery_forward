@@ -1,0 +1,120 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+
+# Create interactive controls
+forward_price_slider = widgets.IntSlider(value=100, min=50, max=150, step=5, description='Forward Price:')
+future_price_input = widgets.IntText(value=105, description='Future Price:', min=50, max=200)
+rounds_slider = widgets.IntSlider(value=100, min=10, max=500, step=10, description='Rounds:')
+players_slider = widgets.IntSlider(value=3, min=2, max=6, step=1, description='Players:')
+run_button = widgets.Button(description='Run Simulation')
+output_area = widgets.Output()
+
+# Store simulation results globally
+sim_data = {}
+
+def run_simulation(b):
+    with output_area:
+        clear_output()
+        
+        forward_price = forward_price_slider.value
+        future_price = future_price_input.value
+        rounds = rounds_slider.value
+        players = players_slider.value
+        
+        # Initial strategies
+        strategies = np.ones(players) * 0.5
+        history = [[] for _ in range(players)]
+        player_actions = [[] for _ in range(players)]
+        payoffs = [[] for _ in range(players)]
+        
+        def payoff(action, forward_price, future_price):
+            if action == "buy":
+                return future_price - forward_price
+            else:
+                return forward_price - future_price
+        
+        # Simulation loop
+        for r in range(rounds):
+            future_price_round = np.random.normal(future_price, 5)
+            
+            for i in range(players):
+                action = "buy" if np.random.rand() < strategies[i] else "sell"
+                payoff_i = payoff(action, forward_price, future_price_round)
+                
+                strategies[i] += 0.05 * (payoff_i > 0) - 0.05 * (payoff_i < 0)
+                strategies[i] = np.clip(strategies[i], 0, 1)
+                
+                history[i].append(strategies[i])
+                player_actions[i].append(action)
+                payoffs[i].append(payoff_i)
+        
+        # Store for later use
+        sim_data['history'] = history
+        sim_data['actions'] = player_actions
+        sim_data['payoffs'] = payoffs
+        sim_data['players'] = players
+        
+        # Plot results
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # Strategy evolution
+        for i in range(players):
+            ax1.plot(history[i], label=f"Player {i+1}", linewidth=2)
+        ax1.axhline(0.5, color="black", linestyle="--", label="Mixed Equilibrium")
+        ax1.set_xlabel("Round")
+        ax1.set_ylabel("Probability of Buying")
+        ax1.set_title("Strategy Evolution Over Time")
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Action distribution
+        action_counts = [player_actions[i].count("buy") for i in range(players)]
+        ax2.bar([f"Player {i+1}" for i in range(players)], action_counts, color='steelblue')
+        ax2.set_ylabel("Number of Buy Actions")
+        ax2.set_title("Buy Action Distribution")
+        ax2.grid(True, axis='y', alpha=0.3)
+        
+        # Cumulative payoffs
+        for i in range(players):
+            cumulative = np.cumsum(payoffs[i])
+            ax3.plot(cumulative, label=f"Player {i+1}", linewidth=2)
+        ax3.set_xlabel("Round")
+        ax3.set_ylabel("Cumulative Payoff")
+        ax3.set_title("Cumulative Payoff Over Time")
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        
+        # Final statistics
+        final_strategies = [history[i][-1] for i in range(players)]
+        final_payoffs = [sum(payoffs[i]) for i in range(players)]
+        
+        stats_text = "Final Statistics:\n" + "="*30 + "\n"
+        for i in range(players):
+            stats_text += f"Player {i+1}:\n"
+            stats_text += f"  Buy Probability: {final_strategies[i]:.3f}\n"
+            stats_text += f"  Total Payoff: {final_payoffs[i]:.2f}\n"
+        
+        ax4.text(0.1, 0.5, stats_text, fontsize=11, family='monospace',
+                verticalalignment='center', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        ax4.axis('off')
+        
+        plt.tight_layout()
+        plt.show()
+        print(f"✓ Simulation complete: {rounds} rounds, {players} players, Forward Price: {forward_price}, Future Price: {future_price}")
+
+run_button.on_click(run_simulation)
+
+# Display controls
+controls = widgets.VBox([
+    widgets.HTML("<h3>Forward Contract Game Simulator</h3>"),
+    forward_price_slider,
+    future_price_input,
+    rounds_slider,
+    players_slider,
+    run_button,
+    output_area
+])
+
+display(controls)
